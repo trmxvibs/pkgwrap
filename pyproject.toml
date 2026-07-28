@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pkgwrap"
+version = "0.1.0"
+description = "A universal package-manager wrapper (apt, pkg, pacman, dnf, apk, brew)."
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "pkgwrap contributors"}
+]
+dependencies = []
+
+[project.scripts]
+pkgwrap = "pkgwrap.cli:main"
+pkw = "pkgwrap.cli:main"
