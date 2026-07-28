@@ -53,7 +53,7 @@ If you only ever use a single operating system, you probably should! But if you 
 ### Option 1: Via pip (Recommended)
 If you already have Python 3.9+ and `pip` installed on your system:
 ```bash
-pip install pkgwrap  (working..)
+pip install pkgwrap-lokesh
 ```
 ### Option 2: via Install Script
 If you don't have Python or pip installed, this script will attempt to install them using your native package manager before installing pkgwrap:
