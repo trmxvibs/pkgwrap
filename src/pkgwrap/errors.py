@@ -1,43 +1,43 @@
-"""Custom exceptions for the pkgwrap CLI tool.
-Defines all domain-specific errors used throughout the application.
+"""Custom exceptions for the pkgwrap application.
+Centralizes all error types for consistent handling across the CLI.
 """
 
-
 class PkgwrapError(Exception):
-    """Base class for all pkgwrap custom exceptions."""
+    """Base exception class for all pkgwrap errors."""
     pass
 
 
 class BackendNotFoundError(PkgwrapError):
-    """Raised when no supported package manager backend can be detected on the system."""
+    """Raised when a supported package manager backend cannot be detected."""
+    pass
+
+
+class UserCancelledError(PkgwrapError):
+    """Raised when a user cancels an interactive prompt or operation."""
+    pass
+
+
+class SudoNotAvailableError(PkgwrapError):
+    """Raised when an operation requires root privileges but 'sudo' is not installed."""
     pass
 
 
 class CommandExecutionError(PkgwrapError):
-    """Raised when a package manager command fails to execute properly.
+    """Raised when a backend command fails to execute or returns a non-zero exit code.
 
-    Args:
-        command (str): The command that failed to execute.
-        returncode (int): The exit code returned by the command.
-        stderr (str, optional): The standard error output, if any. Defaults to "".
+    Attributes:
+        command (str): The command that failed.
+        returncode (int): The exit status of the command.
+        stderr (str, optional): The standard error output, if captured.
     """
 
     def __init__(self, command: str, returncode: int, stderr: str = "") -> None:
-        """Initializes the CommandExecutionError."""
         self.command = command
         self.returncode = returncode
         self.stderr = stderr
+        
         message = f"Command '{command}' failed with exit code {returncode}."
         if stderr:
-            message += f" Error: {stderr.strip()}"
+            message += f" Error details: {stderr}"
+            
         super().__init__(message)
-
-
-class UserCancelledError(PkgwrapError):
-    """Raised when a user cancels an operation (e.g., denying a sudo prompt)."""
-    pass
-
-
-class UnsupportedCommandError(PkgwrapError):
-    """Raised when a requested command is not supported by the detected backend."""
-    pass

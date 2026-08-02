@@ -3,11 +3,12 @@ Defines the standard interface that all package managers must implement,
 including enhanced sudo and auto-yes handling.
 """
 
+import shutil
 import subprocess
 from abc import ABC, abstractmethod
 from typing import List
 
-from pkgwrap.errors import CommandExecutionError, UserCancelledError
+from pkgwrap.errors import CommandExecutionError, SudoNotAvailableError, UserCancelledError
 from pkgwrap.ui import ask_confirmation, print_info
 
 
@@ -40,12 +41,20 @@ class Backend(ABC):
 
         Raises:
             UserCancelledError: If the user denies the sudo confirmation prompt.
+            SudoNotAvailableError: If sudo is required but not installed on the system.
             CommandExecutionError: If the command fails (non-zero exit code) or the executable is missing.
         """
         final_command = command.copy()
 
         if require_sudo:
             if not already_root:
+                # Proactive check before attempting execution
+                if not shutil.which("sudo"):
+                    raise SudoNotAvailableError(
+                        "This system requires root privileges but 'sudo' is not installed. "
+                        "Please install sudo or run this command as root."
+                    )
+                
                 final_command = ["sudo"] + final_command
                 if not auto_yes:
                     print_info(f"The command '{' '.join(final_command)}' requires administrative privileges (sudo).")
@@ -66,6 +75,13 @@ class Backend(ABC):
             
             return result
         except FileNotFoundError as e:
+            # Reactive check if shutil.which missed it or was bypassed
+            if final_command[0] == "sudo":
+                raise SudoNotAvailableError(
+                    "This system requires root privileges but 'sudo' is not installed. "
+                    "Please install sudo or run this command as root."
+                )
+                
             raise CommandExecutionError(
                 command=command_str, 
                 returncode=127, 

@@ -1,5 +1,5 @@
-"""OS and backend package manager detection with caching support.
-Detects the system's package manager taking OS specific constraints into account.
+"""OS and package manager detection logic.
+Identifies the native package manager and manages caching.
 """
 
 import os
@@ -11,61 +11,69 @@ from pkgwrap.errors import BackendNotFoundError
 
 
 def detect_backend() -> str:
-    """Detects the available package manager on the system.
+    """Detects the native package manager backend for the current system.
 
-    Handles OS-specific logic (e.g., distinguishing FreeBSD 'pkg' from Termux 'pkg').
-    Checks the cached backend first. If invalid or expired, checks system PATH
-    using a strict priority order.
+    Checks a local cache first for speed. If not found, explicitly checks
+    for Termux and FreeBSD environments before falling back to a prioritized
+    list of generic package managers.
 
     Returns:
-        str: The name of the detected backend identifier (e.g., 'apt', 'freebsd', 'xbps').
+        str: The identifier of the detected backend.
 
     Raises:
-        BackendNotFoundError: If no supported package manager is found on the system.
+        BackendNotFoundError: If no supported package manager is found.
     """
-    system = platform.system()
-    
-    # Define priority order as a list of tuples: (backend_identifier, executable)
-    candidates = []
-
-    if system == "FreeBSD":
-        candidates.append(("freebsd", "pkg"))
-    else:
-        # Check for Termux environment
-        is_termux = system == "Linux" and "com.termux" in os.environ.get("PREFIX", "")
-        
-        if is_termux:
-            candidates.append(("pkg", "pkg"))
-            
-        # Priority order for Linux and other platforms
-        candidates.extend([
-            ("apt", "apt"),
-            ("pacman", "pacman"),
-            ("dnf", "dnf"),
-            ("apk", "apk"),
-            ("zypper", "zypper"),
-            ("xbps", "xbps-install"),
-            ("nix", "nix-env"),
-            ("eopkg", "eopkg"),
-            ("brew", "brew")
-        ])
-
-    # Convert candidates to a dictionary for quick executable lookup by backend_name
-    valid_backends = {b_name: exe for b_name, exe in candidates}
-
     cached_backend = read_cached_backend()
-    if cached_backend and cached_backend in valid_backends:
-        # Verify the cached command is still available in PATH
-        executable = valid_backends[cached_backend]
+
+    if cached_backend:
+        # Map backend names to their primary executables for cache validation
+        executable = cached_backend
+        if cached_backend == "freebsd":
+            executable = "pkg"
+        elif cached_backend == "nix":
+            executable = "nix-env"
+        elif cached_backend == "xbps":
+            executable = "xbps-install"
+            
         if shutil.which(executable):
             return cached_backend
 
-    # Cache miss, expired, or executable removed; re-detect
-    for b_name, exe in candidates:
-        if shutil.which(exe):
-            write_cached_backend(b_name)
-            return b_name
+    # 1. Termux OS Detection (Highest Priority)
+    # Termux includes an 'apt' wrapper, so we MUST catch Termux before checking 'apt'.
+    prefix = os.environ.get("PREFIX", "")
+    termux_version = os.environ.get("TERMUX_VERSION")
+    
+    if "com.termux" in prefix or termux_version is not None:
+        if shutil.which("pkg"):
+            write_cached_backend("pkg")
+            return "pkg"
+
+    # 2. FreeBSD OS Detection
+    # FreeBSD uses 'pkg', which needs to be routed to the freebsd_backend
+    if platform.system().lower() == "freebsd":
+        if shutil.which("pkg"):
+            write_cached_backend("freebsd")
+            return "freebsd"
+
+    # 3. Generic Package Managers Priority List
+    # Maps the executable to check to the internal backend name
+    priority_managers = [
+        ("apt", "apt"),
+        ("pacman", "pacman"),
+        ("dnf", "dnf"),
+        ("apk", "apk"),
+        ("zypper", "zypper"),
+        ("xbps-install", "xbps"),
+        ("nix-env", "nix"),
+        ("eopkg", "eopkg"),
+        ("brew", "brew")
+    ]
+
+    for cmd, backend_name in priority_managers:
+        if shutil.which(cmd):
+            write_cached_backend(backend_name)
+            return backend_name
 
     raise BackendNotFoundError(
-        "No supported package manager could be found on this system."
+        "Could not detect a supported package manager on this system."
     )

@@ -1,4 +1,3 @@
-# tests/test_detector.py
 """Unit tests for the package manager detector module.
 Mocks platform, os.environ, shutil.which and caching to test logic safely.
 """
@@ -82,8 +81,36 @@ class TestDetector(unittest.TestCase):
         backend_name = detect_backend()
 
         self.assertEqual(backend_name, "pkg")
-        # Should be checked first
         mock_which.assert_called_once_with("pkg")
+        mock_write_cache.assert_called_once_with("pkg")
+
+    @patch("pkgwrap.detector.platform.system")
+    @patch.dict("os.environ", {"TERMUX_VERSION": "0.118.0"}, clear=True)
+    @patch("pkgwrap.detector.write_cached_backend")
+    @patch("pkgwrap.detector.read_cached_backend")
+    @patch("pkgwrap.detector.shutil.which")
+    def test_detect_backend_termux_with_apt_also_present(
+        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
+    ) -> None:
+        """Test that Termux 'pkg' is selected even if 'apt' is also available on the system."""
+        mock_system.return_value = "Linux"
+        mock_read_cache.return_value = None
+
+        def which_mock(cmd: str) -> str:
+            if cmd == "pkg":
+                return "/data/data/com.termux/files/usr/bin/pkg"
+            if cmd == "apt":
+                return "/data/data/com.termux/files/usr/bin/apt"
+            return None
+
+        mock_which.side_effect = which_mock
+
+        backend_name = detect_backend()
+
+        self.assertEqual(backend_name, "pkg")
+        # 'apt' should NOT be checked because Termux detection returns early
+        mock_which.assert_called_once_with("pkg")
+        self.assertNotIn(unittest.mock.call("apt"), mock_which.call_args_list)
         mock_write_cache.assert_called_once_with("pkg")
 
     @patch("pkgwrap.detector.platform.system")

@@ -70,7 +70,7 @@ if ! command -v pip3 &> /dev/null && ! command -v pip &> /dev/null && ! python3 
 fi
 
 echo "=> Installing pkgwrap via pip..."
-python3 -m pip install pkgwrap
+python3 -m pip install pkgwrap-lokesh
 
 echo ""
 echo "✔ Installation complete!"
