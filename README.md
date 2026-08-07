@@ -49,13 +49,23 @@ If you only ever use a single operating system, you probably should! But if you 
 ---
 
 ##  Installation
+### Option 1: Running from Source
+- Ideal for contributors or users on restricted systems where a global pip installation isn't preferred.
+```bash
+git clone https://github.com/trmxvibs/pkgwrap.git
+cd pkgwrap
+python3 -m venv venv
+source venv/bin/activate
+pip install -e .
+pkgwrap --version
+```
 
-### Option 1: Via pip (Recommended)
+### Option 2: Via pip (Recommended)
 If you already have Python 3.9+ and `pip` installed on your system:
 ```bash
 pip install pkgwrap-lokesh
 ```
-### Option 2: via Install Script
+### Option 3: via Install Script
 If you don't have Python or pip installed, this script will attempt to install them using your native package manager before installing pkgwrap:
 ```bash
 bash <(curl -s https://raw.githubusercontent.com/trmxvibs/pkgwrap/main/install.sh)
