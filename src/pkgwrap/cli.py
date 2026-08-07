@@ -4,26 +4,14 @@ Handles root privileges detection and automatic confirmation flags.
 """
 
 import argparse
-import importlib.metadata
 import os
 import sys
 
+from pkgwrap import __version__
 from pkgwrap.backends import get_backend
 from pkgwrap.detector import detect_backend
 from pkgwrap.errors import CommandExecutionError, PkgwrapError, UserCancelledError
 from pkgwrap.ui import print_error, print_info, print_success
-
-
-def get_version() -> str:
-    """Retrieves the package version.
-
-    Returns:
-        str: The version string of pkgwrap.
-    """
-    try:
-        return importlib.metadata.version("pkgwrap")
-    except importlib.metadata.PackageNotFoundError:
-        return "unknown (not installed via pip)"
 
 
 def main() -> None:
@@ -40,7 +28,7 @@ def main() -> None:
     parser.add_argument(
         "--version", 
         action="version", 
-        version=f"%(prog)s {get_version()}",
+        version=f"%(prog)s {__version__}",
         help="Show the version number and exit"
     )
     
