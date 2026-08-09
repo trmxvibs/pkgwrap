@@ -19,10 +19,22 @@ def main() -> None:
     Parses command-line arguments and executes the corresponding backend methods.
     Checks for root privileges and handles automatic yes/confirmation logic.
     """
+    epilog_text = (
+        "Command aliases:\n"
+        "  install : in, add\n"
+        "  remove  : uninstall, del, rm\n"
+        "  update  : up, upgrade\n"
+        "  search  : find\n\n"
+        "Note: 'full-upgrade' and 'dist-upgrade' are intentionally not supported yet \n"
+        "(planned as a separate future command, not an alias).\n"
+        "Use 'pkgwrap <command> --help' for more information on a specific command."
+    )
+
     parser = argparse.ArgumentParser(
         prog="pkgwrap",
         description="A universal package-manager wrapper.",
-        epilog="Use 'pkgwrap <command> --help' for more information on a specific command."
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=epilog_text
     )
     
     parser.add_argument(
@@ -49,18 +61,38 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest="command", help="Available package operations")
 
     # Install command
-    install_parser = subparsers.add_parser("install", parents=[shared_parser], help="Install a package")
+    install_parser = subparsers.add_parser(
+        "install", 
+        aliases=["in", "add"], 
+        parents=[shared_parser], 
+        help="Install a package"
+    )
     install_parser.add_argument("package", help="Name of the package to install")
 
     # Remove command
-    remove_parser = subparsers.add_parser("remove", parents=[shared_parser], help="Remove a package")
+    remove_parser = subparsers.add_parser(
+        "remove", 
+        aliases=["uninstall", "del", "rm"], 
+        parents=[shared_parser], 
+        help="Remove a package"
+    )
     remove_parser.add_argument("package", help="Name of the package to remove")
 
     # Update command
-    subparsers.add_parser("update", parents=[shared_parser], help="Update system packages and repositories")
+    subparsers.add_parser(
+        "update", 
+        aliases=["up", "upgrade"], 
+        parents=[shared_parser], 
+        help="Update system packages and repositories"
+    )
 
     # Search command
-    search_parser = subparsers.add_parser("search", parents=[shared_parser], help="Search for a package")
+    search_parser = subparsers.add_parser(
+        "search", 
+        aliases=["find"], 
+        parents=[shared_parser], 
+        help="Search for a package"
+    )
     search_parser.add_argument("query", help="Search query or keyword")
 
     args = parser.parse_args()
@@ -84,25 +116,25 @@ def main() -> None:
         parser.print_help()
         sys.exit(0)
 
-    # Route subcommands
+    # Route subcommands (checking against both primary names and aliases)
     try:
         backend_name = detect_backend()
         backend = get_backend(backend_name)
         auto_yes = getattr(args, "yes", False)
         
-        if args.command == "install":
+        if args.command in ("install", "in", "add"):
             backend.install(args.package, already_root=is_root, auto_yes=auto_yes)
             print_success(f"Successfully finished installation process for '{args.package}'.")
             
-        elif args.command == "remove":
+        elif args.command in ("remove", "uninstall", "del", "rm"):
             backend.remove(args.package, already_root=is_root, auto_yes=auto_yes)
             print_success(f"Successfully finished removal process for '{args.package}'.")
             
-        elif args.command == "update":
+        elif args.command in ("update", "up", "upgrade"):
             backend.update(already_root=is_root, auto_yes=auto_yes)
             print_success("System packages updated successfully.")
             
-        elif args.command == "search":
+        elif args.command in ("search", "find"):
             backend.search(args.query, already_root=is_root, auto_yes=auto_yes)
             # No print_success here as search usually outputs its own list directly
             
