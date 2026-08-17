@@ -17,6 +17,7 @@ from pkgwrap.backends.xbps_backend import XbpsBackend
 from pkgwrap.backends.nix_backend import NixBackend
 from pkgwrap.backends.eopkg_backend import EopkgBackend
 from pkgwrap.backends.freebsd_backend import FreeBsdBackend
+from pkgwrap.backends.windows_backend import WindowsBackend
 from pkgwrap.errors import BackendNotFoundError
 
 # Map backend string names to their respective classes
@@ -32,6 +33,7 @@ _BACKENDS: Dict[str, Type[Backend]] = {
     "nix": NixBackend,
     "eopkg": EopkgBackend,
     "freebsd": FreeBsdBackend,
+    "winget": WindowsBackend,
 }
 
 
