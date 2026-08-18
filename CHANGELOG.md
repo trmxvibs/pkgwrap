@@ -17,10 +17,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
   dependencies and can break a system without warning; `--depclean` refuses to
   remove anything still required by something else.
 
-Both were found by checking every command in the five documentation-only
-backends against upstream documentation. `yum`, `port` and `openbsd` came back
-clean; see `tests/backends/test_verified_commands.py` for the pinned shapes and
-the reasoning behind each.
+- **winget:** `install`/`upgrade` on a package that is already at the latest
+  version no longer surfaces as a raw, unrecognisable error. winget tries an
+  upgrade first when the package is already installed, and fails with
+  `APPINSTALLER_CLI_ERROR_UPDATE_NOT_APPLICABLE` (exit code 2316632107) when
+  there is nothing newer - which is not a failure from the user's point of
+  view. pkgwrap now recognises this specific code and reports success with a
+  clear message instead. Found by running against real winget on Windows;
+  every other winget failure still raises normally.
+
+Both backend fixes were found by checking every command in the five
+documentation-only backends against upstream documentation. `yum`, `port` and
+`openbsd` came back clean; see `tests/backends/test_verified_commands.py` for
+the pinned shapes and the reasoning behind each.
 
 ## [0.2.0] - 2026-08-18
 
