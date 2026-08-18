@@ -55,6 +55,16 @@ def detect_backend() -> str:
             write_cached_backend("freebsd")
             return "freebsd"
 
+    # 2.5 Windows OS Detection
+    if platform.system().lower() == "windows":
+        if shutil.which("winget"):
+            write_cached_backend("winget")
+            return "winget"
+        raise BackendNotFoundError(
+            "Windows detected but 'winget' was not found. Install 'App Installer' "
+            "from the Microsoft Store, then try again."
+        )
+
     # 3. Generic Package Managers Priority List
     # Maps the executable to check to the internal backend name
     priority_managers = [
