@@ -7,6 +7,7 @@ import argparse
 import os
 import sys
 
+from pkgwrap.package_map import resolve_package_name
 from pkgwrap import __version__
 from pkgwrap.backends import get_backend
 from pkgwrap.detector import detect_backend
@@ -123,12 +124,18 @@ def main() -> None:
         auto_yes = getattr(args, "yes", False)
         
         if args.command in ("install", "in", "add"):
-            backend.install(args.package, already_root=is_root, auto_yes=auto_yes)
-            print_success(f"Successfully finished installation process for '{args.package}'.")
+            resolved_package = resolve_package_name(args.package, backend_name)
+            if resolved_package != args.package:
+                print_info(f"Mapped '{args.package}' -> '{resolved_package}' for {backend_name}")
+            backend.install(resolved_package, already_root=is_root, auto_yes=auto_yes)
+            print_success(f"Successfully finished installation process for '{resolved_package}'.")
             
         elif args.command in ("remove", "uninstall", "del", "rm"):
-            backend.remove(args.package, already_root=is_root, auto_yes=auto_yes)
-            print_success(f"Successfully finished removal process for '{args.package}'.")
+            resolved_package = resolve_package_name(args.package, backend_name)
+            if resolved_package != args.package:
+                print_info(f"Mapped '{args.package}' -> '{resolved_package}' for {backend_name}")
+            backend.remove(resolved_package, already_root=is_root, auto_yes=auto_yes)
+            print_success(f"Successfully finished removal process for '{resolved_package}'.")
             
         elif args.command in ("update", "up", "upgrade"):
             backend.update(already_root=is_root, auto_yes=auto_yes)
