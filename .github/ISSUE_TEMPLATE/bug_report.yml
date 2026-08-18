@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in pkgwrap does not work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you run, and what did you expect instead?
+      placeholder: |
+        I ran `pkgwrap install nmap` and ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: pkgwrap version
+      description: Output of `pkgwrap --version`
+    validations:
+      required: true
+
+  - type: input
+    id: backend
+    attributes:
+      label: Detected backend
+      description: Output of `pkgwrap --backend`
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Ubuntu 24.04 / Termux on Android 14 / Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: dry-run
+    attributes:
+      label: Dry-run output
+      description: Please paste the output of the same command with `--dry-run`
+      render: shell

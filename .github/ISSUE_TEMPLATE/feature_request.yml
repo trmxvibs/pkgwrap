@@ -1,0 +1,21 @@
+name: Feature request
+description: Suggest a new capability or a new package manager
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem would this solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behaviour
+      description: |
+        For a new package manager, please include the exact commands for
+        install, remove, refresh, upgrade, search, list, info and clean,
+        and whether the tool prompts before destructive actions.
+    validations:
+      required: true

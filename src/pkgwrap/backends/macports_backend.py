@@ -1,5 +1,5 @@
-# src/pkgwrap/backends/nix_backend.py
-"""Nix (nix-env user profiles) backend implementation for pkgwrap."""
+# src/pkgwrap/backends/macports_backend.py
+"""MacPorts backend implementation for pkgwrap."""
 
 import subprocess
 from typing import List
@@ -7,15 +7,12 @@ from typing import List
 from pkgwrap.backends.base import Backend
 
 
-class NixBackend(Backend):
-    """Backend for nix-env user profiles. On NixOS itself, system packages are managed
-    declaratively in configuration.nix; this backend only touches the current user's
-    profile.
-    """
+class MacPortsBackend(Backend):
+    """Backend for MacPorts on macOS, for users who prefer it over Homebrew."""
 
-    name = "nix"
-    executable = "nix-env"
-    requires_root = False
+    name = "port"
+    executable = "port"
+    requires_root = True
     has_native_prompt = False
 
     def install(
@@ -26,7 +23,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Install one or more packages."""
-        command: List[str] = ["nix-env", "-i"]
+        command: List[str] = ["port", "install"]
         command += list(packages)
         return self._run_command(
             command,
@@ -44,7 +41,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Remove one or more packages."""
-        command: List[str] = ["nix-env", "-e"]
+        command: List[str] = ["port", "uninstall"]
         command += list(packages)
         return self._run_command(
             command,
@@ -62,7 +59,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Refresh package lists / repository metadata."""
-        command: List[str] = ["nix-channel", "--update"]
+        command: List[str] = ["port", "sync"]
         return self._run_command(
             command,
             require_sudo=self.requires_root,
@@ -78,7 +75,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Upgrade all installed packages."""
-        command: List[str] = ["nix-env", "-u"]
+        command: List[str] = ["port", "upgrade", "outdated"]
         return self._run_command(
             command,
             require_sudo=self.requires_root,
@@ -95,7 +92,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Search the repositories for a package."""
-        command: List[str] = ["nix-env", "-qaP"]
+        command: List[str] = ["port", "search"]
         command += [query]
         return self._run_command(
             command,
@@ -112,7 +109,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """List packages installed on the system."""
-        command: List[str] = ["nix-env", "-q"]
+        command: List[str] = ["port", "installed"]
         return self._run_command(
             command,
             require_sudo=False,
@@ -129,7 +126,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Show detailed information about a package."""
-        command: List[str] = ["nix-env", "-qa", "--description"]
+        command: List[str] = ["port", "info"]
         command += [package]
         return self._run_command(
             command,
@@ -146,7 +143,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Clean cached package archives."""
-        command: List[str] = ["nix-collect-garbage", "-d"]
+        command: List[str] = ["port", "clean", "--all", "installed"]
         return self._run_command(
             command,
             require_sudo=self.requires_root,
