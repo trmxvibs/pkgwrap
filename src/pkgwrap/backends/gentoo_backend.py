@@ -45,7 +45,11 @@ class GentooBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Remove one or more packages."""
-        command: List[str] = ["emerge", "--unmerge"]
+        # The Gentoo wiki warns against --unmerge (-C): it removes packages
+        # without checking reverse dependencies and can break the system.
+        # --depclean is the dependency-aware removal and refuses to remove a
+        # package that something else still needs.
+        command: List[str] = ["emerge", "--depclean"]
         if not auto_yes:
             command += ["--ask"]
         command += list(packages)

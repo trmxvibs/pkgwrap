@@ -109,7 +109,10 @@ class ChocoBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """List packages installed on the system."""
-        command: List[str] = ["choco", "list", "--local-only"]
+        # Chocolatey CLI v2.0.0 removed --local-only / -lo: `choco list` now
+        # lists locally installed packages, and `choco search` queries remote
+        # sources. Passing the old flag is rejected outright on v2+.
+        command: List[str] = ["choco", "list"]
         return self._run_command(
             command,
             require_sudo=False,
