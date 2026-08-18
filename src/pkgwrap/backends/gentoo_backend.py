@@ -1,5 +1,5 @@
-# src/pkgwrap/backends/nix_backend.py
-"""Nix (nix-env user profiles) backend implementation for pkgwrap."""
+# src/pkgwrap/backends/gentoo_backend.py
+"""Portage/emerge (Gentoo) backend implementation for pkgwrap."""
 
 import subprocess
 from typing import List
@@ -7,16 +7,15 @@ from typing import List
 from pkgwrap.backends.base import Backend
 
 
-class NixBackend(Backend):
-    """Backend for nix-env user profiles. On NixOS itself, system packages are managed
-    declaratively in configuration.nix; this backend only touches the current user's
-    profile.
+class GentooBackend(Backend):
+    """Backend for Gentoo's Portage. emerge does not prompt by default, so pkgwrap passes --ask
+    unless -y was given.
     """
 
-    name = "nix"
-    executable = "nix-env"
-    requires_root = False
-    has_native_prompt = False
+    name = "emerge"
+    executable = "emerge"
+    requires_root = True
+    has_native_prompt = True
 
     def install(
         self,
@@ -26,7 +25,9 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Install one or more packages."""
-        command: List[str] = ["nix-env", "-i"]
+        command: List[str] = ["emerge"]
+        if not auto_yes:
+            command += ["--ask"]
         command += list(packages)
         return self._run_command(
             command,
@@ -44,7 +45,9 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Remove one or more packages."""
-        command: List[str] = ["nix-env", "-e"]
+        command: List[str] = ["emerge", "--unmerge"]
+        if not auto_yes:
+            command += ["--ask"]
         command += list(packages)
         return self._run_command(
             command,
@@ -52,7 +55,6 @@ class NixBackend(Backend):
             already_root=already_root,
             auto_yes=auto_yes,
             dry_run=dry_run,
-            confirm="Remove {0}?".format(", ".join(packages)),
         )
 
     def refresh(
@@ -62,7 +64,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Refresh package lists / repository metadata."""
-        command: List[str] = ["nix-channel", "--update"]
+        command: List[str] = ["emerge", "--sync"]
         return self._run_command(
             command,
             require_sudo=self.requires_root,
@@ -78,7 +80,9 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Upgrade all installed packages."""
-        command: List[str] = ["nix-env", "-u"]
+        command: List[str] = ["emerge", "--update", "--deep", "--newuse", "@world"]
+        if not auto_yes:
+            command += ["--ask"]
         return self._run_command(
             command,
             require_sudo=self.requires_root,
@@ -95,7 +99,7 @@ class NixBackend(Backend):
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
         """Search the repositories for a package."""
-        command: List[str] = ["nix-env", "-qaP"]
+        command: List[str] = ["emerge", "--search"]
         command += [query]
         return self._run_command(
             command,
@@ -111,15 +115,8 @@ class NixBackend(Backend):
         auto_yes: bool = False,
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
-        """List packages installed on the system."""
-        command: List[str] = ["nix-env", "-q"]
-        return self._run_command(
-            command,
-            require_sudo=False,
-            already_root=already_root,
-            auto_yes=auto_yes,
-            dry_run=dry_run,
-        )
+        """List installed packages (not supported by this backend)."""
+        return self._unsupported("list")
 
     def info(
         self,
@@ -128,16 +125,8 @@ class NixBackend(Backend):
         auto_yes: bool = False,
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
-        """Show detailed information about a package."""
-        command: List[str] = ["nix-env", "-qa", "--description"]
-        command += [package]
-        return self._run_command(
-            command,
-            require_sudo=False,
-            already_root=already_root,
-            auto_yes=auto_yes,
-            dry_run=dry_run,
-        )
+        """Show package details (not supported by this backend)."""
+        return self._unsupported("info")
 
     def clean(
         self,
@@ -145,12 +134,5 @@ class NixBackend(Backend):
         auto_yes: bool = False,
         dry_run: bool = False,
     ) -> subprocess.CompletedProcess:
-        """Clean cached package archives."""
-        command: List[str] = ["nix-collect-garbage", "-d"]
-        return self._run_command(
-            command,
-            require_sudo=self.requires_root,
-            already_root=already_root,
-            auto_yes=auto_yes,
-            dry_run=dry_run,
-        )
+        """Clean the package cache (not supported by this backend)."""
+        return self._unsupported("clean")

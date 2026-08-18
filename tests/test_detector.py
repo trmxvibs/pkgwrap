@@ -1,157 +1,164 @@
-"""Unit tests for the package manager detector module.
-Mocks platform, os.environ, shutil.which and caching to test logic safely.
-"""
+"""Tests for backend detection: overrides, cache validation, OS branches."""
 
-import os
-import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
+
+import pytest
 
 from pkgwrap.detector import detect_backend
 from pkgwrap.errors import BackendNotFoundError
 
 
-class TestDetector(unittest.TestCase):
-    """Test suite for backend detection logic in pkgwrap."""
+def _which(*found):
+    """Build a shutil.which replacement that only knows about `found`."""
+    found = set(found)
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch("pkgwrap.detector.write_cached_backend")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_cache_hit(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test that detection uses the cache if it is valid and available."""
-        mock_system.return_value = "Linux"
-        mock_read_cache.return_value = "apt"
-        mock_which.side_effect = lambda cmd: "/usr/bin/apt" if cmd == "apt" else None
-        
-        backend_name = detect_backend()
-        
-        self.assertEqual(backend_name, "apt")
-        mock_read_cache.assert_called_once()
-        mock_which.assert_called_once_with("apt")
-        mock_write_cache.assert_not_called()
+    def which(cmd):
+        return "/usr/bin/" + cmd if cmd in found else None
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch.dict("os.environ", {}, clear=True)
-    @patch("pkgwrap.detector.write_cached_backend")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_cache_miss_fallback_linux(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test priority order detection when cache is empty on a standard Linux system."""
-        mock_system.return_value = "Linux"
-        mock_read_cache.return_value = None
-        
-        def which_mock(cmd: str) -> str:
-            if cmd == "pacman":
-                return "/usr/bin/pacman"
-            return None
-            
-        mock_which.side_effect = which_mock
-        
-        backend_name = detect_backend()
-        
-        self.assertEqual(backend_name, "pacman")
-        # Ensure 'apt' is checked before 'pacman'
-        mock_which.assert_any_call("apt")
-        mock_which.assert_any_call("pacman")
-        mock_write_cache.assert_called_once_with("pacman")
+    return which
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch.dict("os.environ", {"PREFIX": "/data/data/com.termux/files/usr"}, clear=True)
-    @patch("pkgwrap.detector.write_cached_backend")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_termux_environment(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test that Termux 'pkg' is prioritized when com.termux is in PREFIX."""
-        mock_system.return_value = "Linux"
-        mock_read_cache.return_value = None
 
-        def which_mock(cmd: str) -> str:
-            if cmd == "pkg":
-                return "/data/data/com.termux/files/usr/bin/pkg"
-            return None
+@pytest.fixture
+def no_cache():
+    with patch("pkgwrap.detector.read_cached_backend", return_value=None), \
+         patch("pkgwrap.detector.write_cached_backend") as write:
+        yield write
 
-        mock_which.side_effect = which_mock
 
-        backend_name = detect_backend()
+def test_env_override_wins(monkeypatch, no_cache):
+    monkeypatch.setenv("PKGWRAP_BACKEND", "pacman")
+    with patch("pkgwrap.detector.shutil.which", _which("apt", "pacman")):
+        assert detect_backend() == "pacman"
 
-        self.assertEqual(backend_name, "pkg")
-        mock_which.assert_called_once_with("pkg")
-        mock_write_cache.assert_called_once_with("pkg")
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch.dict("os.environ", {"TERMUX_VERSION": "0.118.0"}, clear=True)
-    @patch("pkgwrap.detector.write_cached_backend")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_termux_with_apt_also_present(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test that Termux 'pkg' is selected even if 'apt' is also available on the system."""
-        mock_system.return_value = "Linux"
-        mock_read_cache.return_value = None
+def test_env_override_rejects_unknown_backend(monkeypatch, no_cache):
+    monkeypatch.setenv("PKGWRAP_BACKEND", "not-a-backend")
+    with pytest.raises(BackendNotFoundError):
+        detect_backend()
 
-        def which_mock(cmd: str) -> str:
-            if cmd == "pkg":
-                return "/data/data/com.termux/files/usr/bin/pkg"
-            if cmd == "apt":
-                return "/data/data/com.termux/files/usr/bin/apt"
-            return None
 
-        mock_which.side_effect = which_mock
+def test_valid_cache_is_used():
+    with patch("pkgwrap.detector.read_cached_backend", return_value="apt"), \
+         patch("pkgwrap.detector.shutil.which", _which("apt")), \
+         patch("pkgwrap.detector.write_cached_backend") as write:
+        assert detect_backend() == "apt"
+    write.assert_not_called()
 
-        backend_name = detect_backend()
 
-        self.assertEqual(backend_name, "pkg")
-        # 'apt' should NOT be checked because Termux detection returns early
-        mock_which.assert_called_once_with("pkg")
-        self.assertNotIn(unittest.mock.call("apt"), mock_which.call_args_list)
-        mock_write_cache.assert_called_once_with("pkg")
+def test_cache_naming_an_unregistered_backend_is_ignored(monkeypatch):
+    """A hand-edited or corrupted cache must not steer detection."""
+    monkeypatch.delenv("PKGWRAP_BACKEND", raising=False)
+    with patch("pkgwrap.detector.read_cached_backend", return_value="ls"), \
+         patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which("ls", "apt")), \
+         patch("pkgwrap.detector.write_cached_backend") as write:
+        assert detect_backend() == "apt"
+    write.assert_called_once_with("apt")
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch.dict("os.environ", {}, clear=True)
-    @patch("pkgwrap.detector.write_cached_backend")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_freebsd_environment(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_write_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test that FreeBSD environment isolates 'pkg' to freebsd_backend."""
-        mock_system.return_value = "FreeBSD"
-        mock_read_cache.return_value = None
 
-        def which_mock(cmd: str) -> str:
-            if cmd == "pkg":
-                return "/usr/sbin/pkg"
-            return None
+def test_cache_for_uninstalled_manager_is_ignored(monkeypatch):
+    monkeypatch.delenv("PKGWRAP_BACKEND", raising=False)
+    with patch("pkgwrap.detector.read_cached_backend", return_value="pacman"), \
+         patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which("apt")), \
+         patch("pkgwrap.detector.write_cached_backend"):
+        assert detect_backend() == "apt"
 
-        mock_which.side_effect = which_mock
 
-        backend_name = detect_backend()
+def test_no_cache_flag_forces_redetection():
+    with patch("pkgwrap.detector.read_cached_backend", return_value="apt") as read, \
+         patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which("pacman")), \
+         patch("pkgwrap.detector.write_cached_backend"):
+        assert detect_backend(use_cache=False) == "pacman"
+    read.assert_not_called()
 
-        # In FreeBSD, it should map to 'freebsd' identifier, not 'pkg'
-        self.assertEqual(backend_name, "freebsd")
-        mock_which.assert_called_once_with("pkg")
-        mock_write_cache.assert_called_once_with("freebsd")
 
-    @patch("pkgwrap.detector.platform.system")
-    @patch("pkgwrap.detector.read_cached_backend")
-    @patch("pkgwrap.detector.shutil.which")
-    def test_detect_backend_none_found(
-        self, mock_which: MagicMock, mock_read_cache: MagicMock, mock_system: MagicMock
-    ) -> None:
-        """Test that BackendNotFoundError is raised when no manager is found."""
-        mock_system.return_value = "Linux"
-        mock_read_cache.return_value = None
-        mock_which.return_value = None
-        
-        with self.assertRaises(BackendNotFoundError):
+def test_termux_beats_apt(monkeypatch, no_cache):
+    monkeypatch.setenv("PREFIX", "/data/data/com.termux/files/usr")
+    with patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which("pkg", "apt")):
+        assert detect_backend() == "pkg"
+
+
+def test_termux_version_variable_also_works(monkeypatch, no_cache):
+    monkeypatch.setenv("TERMUX_VERSION", "0.118.0")
+    with patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which("pkg", "apt")):
+        assert detect_backend() == "pkg"
+
+
+def test_freebsd_pkg_is_not_termux_pkg(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="FreeBSD"), \
+         patch("pkgwrap.detector.shutil.which", _which("pkg")):
+        assert detect_backend() == "freebsd"
+
+
+def test_openbsd_uses_pkg_add(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="OpenBSD"), \
+         patch("pkgwrap.detector.shutil.which", _which("pkg_add")):
+        assert detect_backend() == "openbsd"
+
+
+def test_windows_prefers_winget_then_choco(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="Windows"), \
+         patch("pkgwrap.detector.shutil.which", _which("winget", "choco")):
+        assert detect_backend() == "winget"
+
+    with patch("pkgwrap.detector.platform.system", return_value="Windows"), \
+         patch("pkgwrap.detector.shutil.which", _which("choco")):
+        assert detect_backend() == "choco"
+
+
+def test_windows_without_any_manager_explains_how_to_fix(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="Windows"), \
+         patch("pkgwrap.detector.shutil.which", _which()):
+        with pytest.raises(BackendNotFoundError) as excinfo:
             detect_backend()
+    assert "winget" in str(excinfo.value)
 
-if __name__ == "__main__":
-    unittest.main()
+
+def test_macos_prefers_brew_then_macports(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="Darwin"), \
+         patch("pkgwrap.detector.shutil.which", _which("brew", "port")):
+        assert detect_backend() == "brew"
+
+    with patch("pkgwrap.detector.platform.system", return_value="Darwin"), \
+         patch("pkgwrap.detector.shutil.which", _which("port")):
+        assert detect_backend() == "port"
+
+
+def test_macos_without_manager_points_at_homebrew(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="Darwin"), \
+         patch("pkgwrap.detector.shutil.which", _which()):
+        with pytest.raises(BackendNotFoundError) as excinfo:
+            detect_backend()
+    assert "brew.sh" in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "executable,expected",
+    [
+        ("apt", "apt"),
+        ("pacman", "pacman"),
+        ("dnf", "dnf"),
+        ("yum", "yum"),
+        ("zypper", "zypper"),
+        ("apk", "apk"),
+        ("xbps-install", "xbps"),
+        ("eopkg", "eopkg"),
+        ("emerge", "emerge"),
+        ("nix-env", "nix"),
+    ],
+)
+def test_linux_priority_probe(no_cache, executable, expected):
+    with patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which(executable)):
+        assert detect_backend() == expected
+
+
+def test_nothing_found_raises(no_cache):
+    with patch("pkgwrap.detector.platform.system", return_value="Linux"), \
+         patch("pkgwrap.detector.shutil.which", _which()):
+        with pytest.raises(BackendNotFoundError):
+            detect_backend()

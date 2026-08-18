@@ -1,70 +1,73 @@
-"""Unit tests for the APT backend.
-Mocks the command execution to ensure correct arguments and flags are passed.
-"""
+"""Focused tests for the APT backend's exact command shapes."""
 
-import unittest
-from unittest.mock import MagicMock, call, patch
+from unittest.mock import call, patch
+
+import pytest
 
 from pkgwrap.backends.apt_backend import AptBackend
 
 
-class TestAptBackend(unittest.TestCase):
-    """Test suite for the Debian/Ubuntu apt package manager backend."""
+@pytest.fixture
+def backend():
+    return AptBackend()
 
-    def setUp(self) -> None:
-        """Set up the test case with an instance of AptBackend."""
-        self.backend = AptBackend()
 
-    def test_name_property(self) -> None:
-        """Test that the backend name is correct."""
-        self.assertEqual(self.backend.name, "apt")
+def test_name_and_executable(backend):
+    assert backend.name == "apt"
+    assert backend.executable == "apt"
+    assert backend.requires_root is True
 
-    @patch("pkgwrap.backends.apt_backend.AptBackend._run_command")
-    def test_install(self, mock_run_command: MagicMock) -> None:
-        """Test the install command formatting and privileges."""
-        self.backend.install("cowsay")
-        mock_run_command.assert_called_once_with(
-            ["apt", "install", "-y", "cowsay"],
+
+def test_install_without_yes_keeps_apt_prompt(backend):
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.install(["cowsay"])
+    assert run.call_args[0][0] == ["apt", "install", "cowsay"]
+    assert run.call_args[1]["require_sudo"] is True
+
+
+def test_install_with_yes_adds_the_flag(backend):
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.install(["cowsay"], auto_yes=True)
+    assert run.call_args[0][0] == ["apt", "install", "-y", "cowsay"]
+
+
+def test_remove_multiple_packages(backend):
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.remove(["cowsay", "sl"], auto_yes=True)
+    assert run.call_args[0][0] == ["apt", "remove", "-y", "cowsay", "sl"]
+
+
+def test_refresh_and_upgrade_are_separate_operations(backend):
+    """`refresh` must never upgrade anything - that surprised users before."""
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.refresh()
+    assert run.call_args_list == [
+        call(
+            ["apt", "update"],
             require_sudo=True,
             already_root=False,
-            auto_yes=False
+            auto_yes=False,
+            dry_run=False,
         )
+    ]
 
-    @patch("pkgwrap.backends.apt_backend.AptBackend._run_command")
-    def test_remove(self, mock_run_command: MagicMock) -> None:
-        """Test the remove command formatting and privileges."""
-        self.backend.remove("cowsay")
-        mock_run_command.assert_called_once_with(
-            ["apt", "remove", "-y", "cowsay"],
-            require_sudo=True,
-            already_root=False,
-            auto_yes=False
-        )
-
-    @patch("pkgwrap.backends.apt_backend.AptBackend._run_command")
-    def test_search(self, mock_run_command: MagicMock) -> None:
-        """Test the search command formatting and privileges."""
-        self.backend.search("cowsay")
-        mock_run_command.assert_called_once_with(
-            ["apt", "search", "cowsay"],
-            require_sudo=False,
-            already_root=False,
-            auto_yes=False
-        )
-
-    @patch("pkgwrap.backends.apt_backend.AptBackend._run_command")
-    def test_update(self, mock_run_command: MagicMock) -> None:
-        """Test the update command runs both update and upgrade sequentially."""
-        self.backend.update()
-        
-        # Verify both commands were executed in the correct order
-        expected_calls = [
-            call(["apt", "update"], require_sudo=True, already_root=False, auto_yes=False),
-            call(["apt", "upgrade", "-y"], require_sudo=True, already_root=False, auto_yes=False)
-        ]
-        mock_run_command.assert_has_calls(expected_calls, any_order=False)
-        self.assertEqual(mock_run_command.call_count, 2)
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.upgrade(auto_yes=True)
+    assert run.call_args[0][0] == ["apt", "upgrade", "-y"]
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_search_does_not_require_sudo(backend):
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.search("cowsay")
+    assert run.call_args[0][0] == ["apt", "search", "cowsay"]
+    assert run.call_args[1]["require_sudo"] is False
+
+
+def test_list_and_info(backend):
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.list_installed()
+    assert run.call_args[0][0] == ["apt", "list", "--installed"]
+
+    with patch.object(AptBackend, "_run_command") as run:
+        backend.info("cowsay")
+    assert run.call_args[0][0] == ["apt", "show", "cowsay"]

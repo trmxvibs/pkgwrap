@@ -1,106 +1,77 @@
-"""Tests for the configuration and caching logic."""
+"""Tests for the configuration directory and backend cache."""
 
+import json
 import os
-import unittest
 from unittest.mock import patch
 
-from pkgwrap.config import (
-    get_cache_file,
-    get_config_dir,
-    read_cached_backend,
-    write_cached_backend,
-)
-from pkgwrap.detector import detect_backend
+from pkgwrap import config
 
 
-class TestConfig(unittest.TestCase):
-    """Test suite for config directory resolution and cache handling."""
-
-    @patch('pkgwrap.config.os.makedirs')
-    @patch('pkgwrap.config.os.environ.get')
-    @patch('pkgwrap.config.platform.system')
-    def test_windows_config_dir_with_appdata(self, mock_system, mock_env_get, mock_makedirs):
-        """Ensure Windows uses APPDATA environment variable when available."""
-        mock_system.return_value = "Windows"
-        mock_env_get.return_value = "C:\\Users\\Test\\AppData\\Roaming"
-        
-        expected_path = os.path.join("C:\\Users\\Test\\AppData\\Roaming", "pkgwrap")
-        self.assertEqual(get_config_dir(), expected_path)
-        mock_makedirs.assert_called_once_with(expected_path, exist_ok=True)
-
-    @patch('pkgwrap.config.os.makedirs')
-    @patch('pkgwrap.config.os.path.expanduser')
-    @patch('pkgwrap.config.os.environ.get')
-    @patch('pkgwrap.config.platform.system')
-    def test_windows_config_dir_without_appdata(self, mock_system, mock_env_get, mock_expanduser, mock_makedirs):
-        """Ensure Windows falls back to expanduser if APPDATA is missing."""
-        mock_system.return_value = "Windows"
-        mock_env_get.return_value = None
-        mock_expanduser.return_value = "C:\\Users\\Test\\AppData\\Roaming\\pkgwrap"
-        
-        self.assertEqual(get_config_dir(), "C:\\Users\\Test\\AppData\\Roaming\\pkgwrap")
-        mock_expanduser.assert_called_once_with(os.path.join("~", "AppData", "Roaming", "pkgwrap"))
-
-    @patch('pkgwrap.config.os.makedirs')
-    @patch('pkgwrap.config.os.path.expanduser')
-    @patch('pkgwrap.config.platform.system')
-    def test_unix_config_dir(self, mock_system, mock_expanduser, mock_makedirs):
-        """Ensure Unix-like systems use ~/.config/pkgwrap."""
-        mock_system.return_value = "Linux"
-        mock_expanduser.return_value = "/home/test/.config/pkgwrap"
-        
-        self.assertEqual(get_config_dir(), "/home/test/.config/pkgwrap")
-        mock_expanduser.assert_called_once_with(os.path.join("~", ".config", "pkgwrap"))
-
-    @patch('pkgwrap.config.print_warning')
-    @patch('pkgwrap.config.os.makedirs')
-    def test_permission_error_returns_none(self, mock_makedirs, mock_warning):
-        """Ensure directory creation failures gracefully return None and warn."""
-        mock_makedirs.side_effect = PermissionError("Permission denied")
-        
-        self.assertIsNone(get_config_dir())
-        mock_warning.assert_called_once()
-        self.assertIn("Could not create config directory", mock_warning.call_args[0][0])
-
-    @patch('pkgwrap.config.os.makedirs')
-    def test_cache_functions_handle_none(self, mock_makedirs):
-        """Ensure cache read/write functions safely no-op when config_dir is None."""
-        mock_makedirs.side_effect = PermissionError("Permission denied")
-        
-        # Suppress warning for clean test output
-        with patch('pkgwrap.config.print_warning'):
-            self.assertIsNone(get_cache_file())
-            self.assertIsNone(read_cached_backend())
-            
-            try:
-                write_cached_backend("apt")
-            except Exception as e:
-                self.fail(f"write_cached_backend crashed with None config_dir: {e}")
-
-    @patch('pkgwrap.detector.shutil.which')
-    @patch('pkgwrap.detector.platform.system')
-    @patch('pkgwrap.config.os.makedirs')
-    def test_detect_backend_resilience(self, mock_makedirs, mock_system, mock_which):
-        """Ensure detect_backend succeeds even if config directory creation fails."""
-        # Force config directory creation to fail
-        mock_makedirs.side_effect = PermissionError("Permission denied")
-        
-        # Mock detector environment so it successfully detects 'apt'
-        mock_system.return_value = "Linux"
-        
-        def mock_which_impl(cmd):
-            return "/usr/bin/apt" if cmd == "apt" else None
-            
-        mock_which.side_effect = mock_which_impl
-        
-        with patch.dict('os.environ', {}, clear=True):  # Clear termux variables
-            with patch('pkgwrap.config.print_warning'):  # Suppress warning output
-                try:
-                    backend = detect_backend()
-                    self.assertEqual(backend, "apt")
-                except Exception as e:
-                    self.fail(f"detect_backend crashed due to config error: {type(e).__name__}: {e}")
+def test_unix_config_dir_uses_xdg(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    with patch("pkgwrap.config.platform.system", return_value="Linux"):
+        assert config.get_config_dir() == os.path.join(str(tmp_path), "pkgwrap")
 
 
-if __name__ == '__main__':
-    unittest.main()
+def test_unix_config_dir_falls_back_to_home(monkeypatch, tmp_path):
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with patch("pkgwrap.config.platform.system", return_value="Linux"):
+        assert config.get_config_dir().endswith(os.path.join(".config", "pkgwrap"))
+
+
+def test_windows_config_dir_uses_appdata(monkeypatch, tmp_path):
+    monkeypatch.setenv("APPDATA", str(tmp_path))
+    with patch("pkgwrap.config.platform.system", return_value="Windows"):
+        assert config.get_config_dir() == os.path.join(str(tmp_path), "pkgwrap")
+
+
+def test_windows_config_dir_without_appdata(monkeypatch, tmp_path):
+    monkeypatch.delenv("APPDATA", raising=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    with patch("pkgwrap.config.platform.system", return_value="Windows"):
+        assert config.get_config_dir().endswith(os.path.join("AppData", "Roaming", "pkgwrap"))
+
+
+def test_unwritable_config_dir_disables_caching_without_crashing():
+    with patch("pkgwrap.config.os.makedirs", side_effect=PermissionError("denied")), \
+         patch("pkgwrap.config.print_warning") as warn:
+        assert config.get_config_dir() is None
+        assert config.get_cache_file() is None
+        assert config.read_cached_backend() is None
+        config.write_cached_backend("apt")  # must not raise
+    assert warn.called
+
+
+def test_write_then_read_round_trip():
+    config.write_cached_backend("apt")
+    assert config.read_cached_backend() == "apt"
+
+
+def test_corrupted_cache_is_ignored():
+    cache_file = config.get_cache_file()
+    with open(cache_file, "w", encoding="utf-8") as handle:
+        handle.write("{ this is not json")
+    assert config.read_cached_backend() is None
+
+
+def test_cache_from_an_older_format_is_ignored():
+    cache_file = config.get_cache_file()
+    with open(cache_file, "w", encoding="utf-8") as handle:
+        json.dump({"backend": "apt"}, handle)  # no version key
+    assert config.read_cached_backend() is None
+
+
+def test_non_string_backend_is_ignored():
+    cache_file = config.get_cache_file()
+    with open(cache_file, "w", encoding="utf-8") as handle:
+        json.dump({"version": config.CACHE_VERSION, "backend": 42}, handle)
+    assert config.read_cached_backend() is None
+
+
+def test_clear_cache():
+    config.write_cached_backend("apt")
+    assert config.clear_cache() is True
+    assert config.read_cached_backend() is None
+    assert config.clear_cache() is False
