@@ -1,86 +1,92 @@
-"""Configuration and cache management for pkgwrap.
-Handles storing and retrieving the detected backend from ~/.config/pkgwrap/backend.json.
+"""Configuration and caching module for pkgwrap.
+Handles reading and writing the detected backend to a cache file
+to speed up subsequent executions. Includes graceful fallbacks for
+environments where directory creation is restricted.
 """
 
 import json
-import time
-from pathlib import Path
+import os
+import platform
 from typing import Optional
 
-CACHE_EXPIRY_SECONDS = 7 * 24 * 60 * 60  # 7 days in seconds
+try:
+    from pkgwrap.ui import print_warning
+except ImportError:
+    # Fallback to print_info or print_error if print_warning isn't explicitly defined in ui.py
+    from pkgwrap.ui import print_info as print_warning
 
 
-def get_config_dir() -> Path:
-    """Gets the path to the pkgwrap configuration directory.
-
+def get_config_dir() -> Optional[str]:
+    """Get the path to the configuration directory for pkgwrap.
+    Uses %APPDATA%/pkgwrap on Windows, and ~/.config/pkgwrap on Unix-like systems.
     Creates the directory if it does not exist.
 
     Returns:
-        Path: The pathlib.Path object representing the configuration directory.
+        str: The path to the config directory, or None if creation fails.
     """
-    config_dir = Path.home() / ".config" / "pkgwrap"
-    config_dir.mkdir(parents=True, exist_ok=True)
-    return config_dir
+    if platform.system().lower() == "windows":
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            config_dir = os.path.join(appdata, "pkgwrap")
+        else:
+            # Fallback if APPDATA is somehow missing from environment
+            config_dir = os.path.expanduser(os.path.join("~", "AppData", "Roaming", "pkgwrap"))
+    else:
+        config_dir = os.path.expanduser(os.path.join("~", ".config", "pkgwrap"))
+
+    try:
+        os.makedirs(config_dir, exist_ok=True)
+        return config_dir
+    except Exception as e:
+        print_warning(f"Warning: Could not create config directory '{config_dir}' ({e}). Caching disabled.")
+        return None
 
 
-def get_cache_file() -> Path:
-    """Gets the path to the backend cache file.
+def get_cache_file() -> Optional[str]:
+    """Get the path to the backend cache file.
 
     Returns:
-        Path: The pathlib.Path object representing the cache file.
+        str: The path to the cache file, or None if the config dir is unavailable.
     """
-    return get_config_dir() / "backend.json"
+    config_dir = get_config_dir()
+    if config_dir is None:
+        return None
+    return os.path.join(config_dir, "backend.json")
 
 
 def read_cached_backend() -> Optional[str]:
-    """Reads the cached backend name if it is still valid.
-
-    Checks ~/.config/pkgwrap/backend.json. If the file exists, is valid JSON,
-    contains the required fields, and the timestamp is less than 7 days old,
-    it returns the backend name. Otherwise, it returns None.
+    """Read the detected backend from the cache file.
 
     Returns:
-        Optional[str]: The cached backend name, or None if the cache is expired/missing.
+        str: The name of the cached backend, or None if not found or unreadable.
     """
     cache_file = get_cache_file()
-    if not cache_file.exists():
+    if not cache_file or not os.path.exists(cache_file):
         return None
 
     try:
         with open(cache_file, "r", encoding="utf-8") as f:
             data = json.load(f)
-        
-        backend_name = data.get("backend")
-        timestamp = data.get("timestamp")
-
-        if not backend_name or not isinstance(timestamp, (int, float)):
-            return None
-
-        current_time = time.time()
-        if current_time - timestamp > CACHE_EXPIRY_SECONDS:
-            return None  # Cache expired
-
-        return str(backend_name)
-    except (json.JSONDecodeError, OSError):
+            return data.get("backend")
+    except Exception:
+        # Silently fail on read errors (corrupted JSON, permissions, etc.)
+        # so we can seamlessly fall back to re-detecting.
         return None
 
 
 def write_cached_backend(backend_name: str) -> None:
-    """Writes the detected backend name and current timestamp to the cache.
+    """Write the detected backend to the cache file.
 
     Args:
-        backend_name (str): The name of the detected backend (e.g., 'apt', 'pacman').
+        backend_name (str): The name of the backend to cache.
     """
     cache_file = get_cache_file()
-    data = {
-        "backend": backend_name,
-        "timestamp": time.time()
-    }
+    if not cache_file:
+        return
 
     try:
         with open(cache_file, "w", encoding="utf-8") as f:
-            json.dump(data, f)
-    except OSError:
-        # If cache writing fails (e.g., due to permissions), we fail silently
-        # to prevent disrupting the core application functionality.
-        pass
+            json.dump({"backend": backend_name}, f)
+    except Exception as e:
+        # Don't crash the program if writing to the cache fails
+        print_warning(f"Warning: Could not write cache file '{cache_file}' ({e}).")
