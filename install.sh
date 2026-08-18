@@ -222,9 +222,15 @@ main() {
     info "Try: pkgwrap --backend"
 
     case ":$PATH:" in
-        *":$BIN_DIR:"*) ;;
-        *) warn "$BIN_DIR is not in your PATH. Add this to your shell profile:"
-           printf '      export PATH="%s:$PATH"\n' "$BIN_DIR" ;;
+        *":$BIN_DIR:"*)
+            ;;
+        *)
+            warn "$BIN_DIR is not in your PATH. Add this to your shell profile:"
+            # $PATH must stay literal here: this line is printed for the user to
+            # copy into their shell profile, so it must not expand at print time.
+            # shellcheck disable=SC2016
+            printf '      export PATH="%s:$PATH"\n' "$BIN_DIR"
+            ;;
     esac
 }
 
