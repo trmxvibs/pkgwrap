@@ -19,6 +19,13 @@ Please report security issues privately, not in a public issue:
 Please include the pkgwrap version, `pkgwrap --backend` output, your OS, and a
 minimal reproduction. A first response should arrive within seven days.
 
+## Distribution
+
+pkgwrap is installed from source from this repository only. It is not
+published on PyPI or any other package index, so any package with a similar
+name on an index is **not** produced by this project. Verify that you are
+cloning `https://github.com/trmxvibs/pkgwrap` before installing.
+
 ## Threat model
 
 pkgwrap runs the system package manager on the user's behalf, so the areas

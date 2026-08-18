@@ -3,7 +3,7 @@
 *One command. Every package manager.*
 
 [![License](https://img.shields.io/github/license/trmxvibs/pkgwrap)](LICENSE)
-[![PyPI Version](https://img.shields.io/pypi/v/pkgwrap-lokesh)](https://pypi.org/project/pkgwrap-lokesh/)
+[![Latest Release](https://img.shields.io/github/v/tag/trmxvibs/pkgwrap?label=version)](https://github.com/trmxvibs/pkgwrap/releases)
 [![Python Versions](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
 [![CI](https://github.com/trmxvibs/pkgwrap/actions/workflows/ci.yml/badge.svg)](https://github.com/trmxvibs/pkgwrap/actions/workflows/ci.yml)
 [![GitHub Stars](https://img.shields.io/github/stars/trmxvibs/pkgwrap?style=social)](https://github.com/trmxvibs/pkgwrap/stargazers)
@@ -41,21 +41,10 @@ Windows laptop and a Termux shell, `pkgwrap` removes the friction.
 
 ## Installation
 
-### Via pip
+pkgwrap is distributed **from source only** - it is not published on PyPI or
+any other package index. Install it directly from this repository.
 
-```bash
-pip install pkgwrap-lokesh
-```
-
-On modern Debian, Ubuntu and Fedora the system Python is *externally managed*
-(PEP 668), so a plain `pip install` is refused. Use one of:
-
-```bash
-pipx install pkgwrap-lokesh      # recommended: isolated and always on PATH
-pip install --user pkgwrap-lokesh
-```
-
-### Via install script
+### Install script (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/trmxvibs/pkgwrap/main/install.sh -o install.sh
@@ -63,16 +52,40 @@ less install.sh          # always read a script before running it
 bash install.sh
 ```
 
-The script picks the right strategy for your system automatically: an active
-virtualenv, then `pipx`, then `pip --user`, and finally a dedicated venv with
+The script clones the repository to `~/.local/share/pkgwrap/src` and picks the
+right install strategy for your system automatically: an active virtualenv,
+then `pipx`, then `pip --user`, and finally a dedicated venv with
 `pkgwrap`/`pkw` symlinked into `~/.local/bin`.
 
-### From source
+### From a clone you already have
 
 ```bash
 git clone https://github.com/trmxvibs/pkgwrap.git
 cd pkgwrap
-bash install.sh --source
+bash install.sh --local
+```
+
+### Manual install
+
+If you would rather run pip yourself:
+
+```bash
+git clone https://github.com/trmxvibs/pkgwrap.git
+cd pkgwrap
+
+pipx install .              # isolated, always on PATH
+# or
+pip install --user .
+```
+
+On modern Debian, Ubuntu and Fedora the system Python is *externally managed*
+(PEP 668), so a plain `pip install .` is refused. Use `pipx`, `pip --user`, or
+a virtual environment.
+
+### Update
+
+```bash
+bash install.sh --update
 ```
 
 ### Uninstall
@@ -80,6 +93,12 @@ bash install.sh --source
 ```bash
 bash install.sh --uninstall
 ```
+
+> **Note on PyPI.** Earlier builds were published as `pkgwrap-lokesh` on PyPI.
+> That package is no longer maintained and will not receive further updates.
+> If you installed it that way, remove it with
+> `pip uninstall pkgwrap-lokesh` (or `pipx uninstall pkgwrap-lokesh`) and
+> reinstall from source.
 
 ---
 

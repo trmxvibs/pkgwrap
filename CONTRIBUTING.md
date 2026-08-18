@@ -45,6 +45,12 @@ In the PR, please say which system you verified the commands on. "Copied from
 the wiki" is honest and useful information too, so we know what still needs
 real-world confirmation.
 
+## Releases
+
+pkgwrap is distributed from source, not through a package index. A release is
+a git tag plus a GitHub Release whose notes come from `CHANGELOG.md`. Please
+do not add publishing steps or upload credentials to CI.
+
 ## Commit messages and PRs
 
 - One logical change per PR.

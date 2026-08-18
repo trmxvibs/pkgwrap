@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "pkgwrap-lokesh"
+name = "pkgwrap"
 dynamic = ["version"]
-description = "One command. Every package manager. Universal CLI wrapper for apt, pkg, pacman, dnf, yum, apk, brew, zypper, xbps, nix, eopkg, emerge, MacPorts, FreeBSD/OpenBSD pkg, winget and choco."
+description = "One command. Every package manager. Universal CLI wrapper for apt, pkg, pacman, dnf, yum, apk, brew, zypper, xbps, nix, eopkg, emerge, MacPorts, FreeBSD/OpenBSD pkg, winget and choco. Installed from source."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
@@ -52,6 +52,7 @@ dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.5"]
 
 [project.urls]
 Homepage = "https://github.com/trmxvibs/pkgwrap"
+Documentation = "https://github.com/trmxvibs/pkgwrap#readme"
 Repository = "https://github.com/trmxvibs/pkgwrap"
 Issues = "https://github.com/trmxvibs/pkgwrap/issues"
 Changelog = "https://github.com/trmxvibs/pkgwrap/blob/main/CHANGELOG.md"

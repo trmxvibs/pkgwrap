@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [0.2.0] - 2026-08-18
 
+### Removed
+
+- **PyPI distribution.** pkgwrap is now installed from source only. The
+  `pkgwrap-lokesh` package on PyPI is no longer maintained; existing users
+  should uninstall it and reinstall with `install.sh`. The project metadata
+  name is now simply `pkgwrap`.
+
 ### Security / safety
 
 - **Non-interactive flags are no longer forced.** `-y`, `--noconfirm` and
@@ -51,16 +58,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - Explicit macOS detection with a helpful message when no package manager is
   present; the same for Windows.
 - `XDG_CONFIG_HOME` is respected for the cache location.
-- `py.typed` marker, full PyPI metadata, and a `dev` extra.
+- `py.typed` marker, complete project metadata, and a `dev` extra.
 - GitHub Actions CI: pytest across Python 3.9-3.13 on Linux, macOS and
   Windows, plus ruff, shellcheck and a packaging check.
 
 ### Changed
 
-- `install.sh` handles PEP 668 externally-managed environments (pipx, then
-  `pip --user`, then a dedicated venv with shims), checks for `sudo` before
-  using it, supports `--uninstall`, and no longer claims success when the
-  command would not actually be on `PATH`.
+- `install.sh` is now a source installer: it clones (or updates) the
+  repository and installs from the checkout. It handles PEP 668
+  externally-managed environments (pipx, then `pip --user`, then a dedicated
+  venv with shims), checks for `sudo` before using it, supports `--local`,
+  `--update` and `--uninstall`, and no longer claims success when the command
+  would not actually be on `PATH`.
 - Backend interface: methods take a list of packages and accept `dry_run`;
   each backend declares `executable`, `requires_root` and `has_native_prompt`.
 - The version is now defined once, in `pkgwrap/__init__.py`.

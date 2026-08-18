@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 #
-# pkgwrap installer.
+# pkgwrap installer (source install from GitHub).
 #
-#   bash install.sh              install from PyPI (recommended)
-#   bash install.sh --source     install from a git clone, in editable mode
+#   bash install.sh              clone the repository and install
+#   bash install.sh --local      install from the current directory instead
+#   bash install.sh --update     pull the latest commit and reinstall
 #   bash install.sh --uninstall  remove pkgwrap again
 #
-# The script never installs into a system Python that is marked as
-# externally managed (PEP 668). It prefers pipx, then a --user install, and
-# only falls back to a dedicated virtual environment with launcher shims.
+# pkgwrap is not published on any package index; it is installed from source.
+# The script never installs into a system Python that is marked as externally
+# managed (PEP 668). It prefers pipx, then a --user install, and finally a
+# dedicated virtual environment with launcher shims in ~/.local/bin.
 
 set -euo pipefail
 
 REPO_URL="https://github.com/trmxvibs/pkgwrap.git"
-PACKAGE_NAME="pkgwrap-lokesh"
+PACKAGE_NAME="pkgwrap"
 INSTALL_DIR="${PKGWRAP_HOME:-$HOME/.local/share/pkgwrap}"
+SRC_DIR="$INSTALL_DIR/src"
 BIN_DIR="${PKGWRAP_BIN:-$HOME/.local/bin}"
-MODE="pip"
+MODE="clone"
 
 info()  { printf '=> %s\n' "$1"; }
 ok()    { printf '[OK] %s\n' "$1"; }
@@ -25,10 +28,11 @@ fail()  { printf '[X] %s\n' "$1" >&2; exit 1; }
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
-        --source|-s)    MODE="source" ;;
+        --local|-l)     MODE="local" ;;
+        --update|-U)    MODE="update" ;;
         --uninstall|-u) MODE="uninstall" ;;
         --help|-h)
-            sed -n '3,12p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '3,13p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) fail "Unknown option: $1 (try --help)" ;;
@@ -79,7 +83,7 @@ install_python_if_missing() {
     elif have brew; then
         brew install python3 git
     else
-        fail "Could not detect a supported package manager. Install Python 3 and pip manually, then re-run."
+        fail "Could not detect a supported package manager. Install Python 3, pip and git manually, then re-run."
     fi
 }
 
@@ -108,31 +112,28 @@ link_shims() {
     ok "Linked 'pkgwrap' and 'pkw' into $BIN_DIR"
 }
 
-install_target() {
-    # $1 is either the PyPI package name or a local path for editable installs.
-    local target="$1"
-    local editable="${2:-}"
-    local pip_args=()
-    [ -n "$editable" ] && pip_args+=("-e")
+# Install the checked-out source tree at $1, in editable mode.
+install_from_source() {
+    local source_path="$1"
 
     if in_virtualenv; then
         info "Virtual environment detected, installing into it..."
-        python3 -m pip install "${pip_args[@]}" "$target"
+        python3 -m pip install -e "$source_path"
         ok "Installed into the active virtual environment."
         return
     fi
 
-    # pipx has no editable mode, so it is skipped for source installs.
-    if have pipx && [ -z "$editable" ]; then
+    # pipx has no editable mode, so it gets the tree as a one-off install.
+    if have pipx; then
         info "Installing with pipx (isolated, always on PATH)..."
-        pipx install --force "$target"
+        pipx install --force "$source_path"
         ok "Installed with pipx."
         return
     fi
 
     if is_termux || ! is_externally_managed; then
         info "Installing with pip --user..."
-        python3 -m pip install --user "${pip_args[@]}" "$target"
+        python3 -m pip install --user -e "$source_path"
         ok "Installed with pip --user."
         return
     fi
@@ -142,8 +143,22 @@ install_target() {
     mkdir -p "$INSTALL_DIR"
     python3 -m venv "$INSTALL_DIR/venv"
     "$INSTALL_DIR/venv/bin/python" -m pip install --upgrade pip >/dev/null
-    "$INSTALL_DIR/venv/bin/python" -m pip install "${pip_args[@]}" "$target"
+    "$INSTALL_DIR/venv/bin/python" -m pip install -e "$source_path"
     link_shims "$INSTALL_DIR/venv"
+}
+
+clone_or_update() {
+    have git || fail "git is required to install pkgwrap from source but was not found."
+
+    if [ -d "$SRC_DIR/.git" ]; then
+        info "Existing clone found at $SRC_DIR, updating..."
+        git -C "$SRC_DIR" pull --ff-only \
+            || warn "Could not fast-forward; keeping the existing checkout."
+    else
+        mkdir -p "$INSTALL_DIR"
+        info "Cloning $REPO_URL into $SRC_DIR ..."
+        git clone "$REPO_URL" "$SRC_DIR"
+    fi
 }
 
 uninstall() {
@@ -177,7 +192,7 @@ uninstall() {
 }
 
 main() {
-    info "pkgwrap installer"
+    info "pkgwrap installer (source install)"
     echo
 
     if [ "$MODE" = "uninstall" ]; then
@@ -187,22 +202,20 @@ main() {
 
     install_python_if_missing
 
-    if [ "$MODE" = "source" ]; then
-        have git || fail "git is required for a source install but was not found."
-
-        local src_dir="$INSTALL_DIR/src"
-        if [ -d "$src_dir/.git" ]; then
-            info "Existing clone found at $src_dir, updating..."
-            git -C "$src_dir" pull --ff-only || warn "Could not fast-forward; keeping the existing checkout."
-        else
-            mkdir -p "$INSTALL_DIR"
-            git clone "$REPO_URL" "$src_dir"
-        fi
-
-        install_target "$src_dir" editable
-    else
-        install_target "$PACKAGE_NAME"
-    fi
+    case "$MODE" in
+        local)
+            local here
+            here="$(cd "$(dirname "$0")" && pwd)"
+            [ -f "$here/pyproject.toml" ] \
+                || fail "No pyproject.toml next to this script; run without --local to clone instead."
+            info "Installing from the local checkout at $here ..."
+            install_from_source "$here"
+            ;;
+        clone|update)
+            clone_or_update
+            install_from_source "$SRC_DIR"
+            ;;
+    esac
 
     echo
     ok "Installation complete."

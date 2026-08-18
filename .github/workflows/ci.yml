@@ -68,14 +68,29 @@ jobs:
       - run: sudo apt-get update && sudo apt-get install -y shellcheck
       - run: shellcheck install.sh
 
-  build:
-    name: build distribution
+  install-from-source:
+    name: install from a clean clone
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m pip install build twine
-      - run: python -m build
-      - run: python -m twine check dist/*
+
+      # pkgwrap is distributed from source, so the thing worth testing is that
+      # a fresh checkout installs and produces working console scripts.
+      - name: Install from the checkout
+        run: python -m pip install .
+
+      - name: Smoke test
+        run: |
+          pkgwrap --version
+          pkw --version
+          pkgwrap install curl --dry-run
+
+      - name: Lint the installer script
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck
+          bash -n install.sh
+          bash install.sh --help
