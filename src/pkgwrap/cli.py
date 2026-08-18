@@ -11,6 +11,7 @@ import os
 import sys
 from typing import List, Optional, Sequence
 
+from pkgwrap.package_map import resolve_package_name
 from pkgwrap import __version__
 from pkgwrap.backends import available_backends, get_backend
 from pkgwrap.config import clear_cache, get_cache_file
