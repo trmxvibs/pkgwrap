@@ -194,6 +194,13 @@ pkgwrap tries never to leave you without a safety net:
 | Windows | `winget` | `winget` | UAC |
 | Windows (fallback) | `choco` | `choco` | elevated shell |
 
+**Verification status.** Commands for every backend have been checked against
+upstream documentation, and the shapes that matter are pinned by tests in
+`tests/backends/test_verified_commands.py`. Five backends — `yum`, `emerge`,
+`port`, `openbsd` and `choco` — have **not yet been run on the systems they
+target**. If you use one of these, `pkgwrap <command> --dry-run` prints the
+exact command without executing it; please report what you see.
+
 Notes:
 
 - Termux and FreeBSD both expose a `pkg` command; they are distinguished by
