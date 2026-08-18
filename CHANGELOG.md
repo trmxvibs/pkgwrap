@@ -6,6 +6,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **choco:** `list` no longer passes `--local-only`. Chocolatey CLI v2.0.0
+  removed that option and rejects it outright, so `pkgwrap list` could not
+  work on any current Chocolatey install. On v2+ a bare `choco list` already
+  reports only locally installed packages.
+- **emerge:** removals now use `--depclean` instead of `--unmerge`. The Gentoo
+  wiki warns that `--unmerge` (`-C`) removes packages without checking reverse
+  dependencies and can break a system without warning; `--depclean` refuses to
+  remove anything still required by something else.
+
+Both were found by checking every command in the five documentation-only
+backends against upstream documentation. `yum`, `port` and `openbsd` came back
+clean; see `tests/backends/test_verified_commands.py` for the pinned shapes and
+the reasoning behind each.
+
 ## [0.2.0] - 2026-08-18
 
 ### Removed
