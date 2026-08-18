@@ -15,9 +15,16 @@ def test_unix_config_dir_uses_xdg(monkeypatch, tmp_path):
 
 def test_unix_config_dir_falls_back_to_home(monkeypatch, tmp_path):
     monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    # Set both: expanduser("~") consults HOME on POSIX and USERPROFILE on
+    # Windows. Setting only HOME let this test escape to the real home
+    # directory when the suite ran on Windows.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     with patch("pkgwrap.config.platform.system", return_value="Linux"):
-        assert config.get_config_dir().endswith(os.path.join(".config", "pkgwrap"))
+        config_dir = config.get_config_dir()
+    assert config_dir is not None
+    assert config_dir.endswith(os.path.join(".config", "pkgwrap"))
+    assert str(tmp_path) in config_dir
 
 
 def test_windows_config_dir_uses_appdata(monkeypatch, tmp_path):
@@ -31,7 +38,9 @@ def test_windows_config_dir_without_appdata(monkeypatch, tmp_path):
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("USERPROFILE", str(tmp_path))
     with patch("pkgwrap.config.platform.system", return_value="Windows"):
-        assert config.get_config_dir().endswith(os.path.join("AppData", "Roaming", "pkgwrap"))
+        config_dir = config.get_config_dir()
+    assert config_dir is not None
+    assert config_dir.endswith(os.path.join("AppData", "Roaming", "pkgwrap"))
 
 
 def test_unwritable_config_dir_disables_caching_without_crashing():

@@ -17,7 +17,11 @@ def isolated_config(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(config_home))
     monkeypatch.setenv("APPDATA", str(config_home))
     monkeypatch.delenv("PKGWRAP_BACKEND", raising=False)
+    # os.path.expanduser reads HOME on POSIX but USERPROFILE on Windows, so
+    # both must be redirected or the suite would touch the developer's real
+    # home directory when a test forces the opposite platform.
     monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
     monkeypatch.delenv("NO_COLOR", raising=False)
     monkeypatch.delenv("FORCE_COLOR", raising=False)
     return config_home
