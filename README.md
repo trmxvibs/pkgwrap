@@ -65,7 +65,7 @@ cd pkgwrap
 bash install.sh --local
 ```
 
-### Manual install
+### Manual install (Linux / macOS / Termux)
 
 If you would rather run pip yourself:
 
@@ -82,13 +82,59 @@ On modern Debian, Ubuntu and Fedora the system Python is *externally managed*
 (PEP 668), so a plain `pip install .` is refused. Use `pipx`, `pip --user`, or
 a virtual environment.
 
+### Windows
+
+`install.sh` is a bash script and does not run in `cmd.exe` or PowerShell
+directly (use it from Git Bash or WSL if you prefer a bash workflow). On a
+plain Windows Command Prompt, install with `pip` instead:
+
+```cmd
+git clone https://github.com/trmxvibs/pkgwrap.git
+cd pkgwrap
+pip install -e ".[dev]"
+```
+
+`-e` (editable) means `git pull` alone picks up new changes without
+reinstalling - this is also the workflow for anyone developing pkgwrap
+itself. `.[dev]` additionally pulls in `pytest` and `ruff` for testing and
+linting; drop it for a plain end-user install (`pip install .`).
+
+Verify the install:
+
+```cmd
+pkgwrap --version
+pkw --version
+pkgwrap --backend
+```
+
+If `pkgwrap`/`pkw` are "not recognized" right after installing, `pip` put
+them in a Scripts folder that is not on your PATH yet - most commonly
+`%APPDATA%\Python\Python3x\Scripts` for a per-user install, or
+`<venv>\Scripts` inside a virtual environment. `pip install` prints the
+exact folder in a "WARNING: The script ... is installed in '...' which is
+not on PATH" line when this happens; add that folder to PATH (Windows
+Settings → "Edit environment variables for your account") and open a new
+terminal.
+
+To uninstall on Windows:
+
+```cmd
+pip uninstall pkgwrap
+```
+
 ### Update
 
 ```bash
 bash install.sh --update
 ```
 
-### Uninstall
+On Windows, update by pulling and letting the editable install pick it up:
+
+```cmd
+git pull origin main
+```
+
+### Uninstall (Linux / macOS / Termux)
 
 ```bash
 bash install.sh --uninstall
@@ -257,12 +303,16 @@ Native package manager executes
 ```bash
 git clone https://github.com/trmxvibs/pkgwrap.git
 cd pkgwrap
-python -m venv venv && source venv/bin/activate
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
 pip install -e ".[dev]"
 
 pytest              # run the test suite
 ruff check .        # lint
 ```
+
+A virtual environment is optional here - the Windows commands in
+[Installation](#installation) install directly with `pip install -e ".[dev]"`
+and work fine without one.
 
 Adding a package manager is a single file in `src/pkgwrap/backends/` plus one
 line in the registry. The contract tests in `tests/backends/test_all_backends.py`
