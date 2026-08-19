@@ -99,6 +99,11 @@ the pinned shapes and the reasoning behind each.
   each backend declares `executable`, `requires_root` and `has_native_prompt`.
 - The version is now defined once, in `pkgwrap/__init__.py`.
 
+### Contributors
+
+Thanks to [@kaminimangal](https://github.com/kaminimangal) for the winget
+backend (#9) and package name mapping (#10).
+
 ## [0.1.2] - 2026-08-07
 
 - Initial public release: 11 backends, automatic sudo/root detection,
