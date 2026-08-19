@@ -54,7 +54,18 @@ as_root() {
 }
 
 is_termux() {
-    [ -n "${TERMUX_VERSION:-}" ] || case "${PREFIX:-}" in *com.termux*) return 0 ;; esac
+    # Two independent signals, checked as separate conditions so a match on
+    # either one returns true immediately. The previous one-liner combined
+    # them with `||` before an unconditional `return 1` on the next line,
+    # which meant that whenever TERMUX_VERSION was set, the short-circuited
+    # `case` never ran but the function still fell through to `return 1` -
+    # so it reported "not Termux" on every real Termux install.
+    if [ -n "${TERMUX_VERSION:-}" ]; then
+        return 0
+    fi
+    case "${PREFIX:-}" in
+        *com.termux*) return 0 ;;
+    esac
     return 1
 }
 
