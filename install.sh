@@ -123,6 +123,71 @@ link_shims() {
     ok "Linked 'pkgwrap' and 'pkw' into $BIN_DIR"
 }
 
+# Make sure $1 ends up on PATH for every future shell, on every OS this
+# script supports (Linux, macOS, Termux, BSD) - not just bash. A shell
+# script can never change its parent shell's PATH (each invocation is a
+# child process), so this cannot make the *current* terminal pick it up
+# without one `source` - but it removes the need for the user to ever
+# edit a shell config by hand, and every new terminal works immediately.
+ensure_path_persisted() {
+    local dir="$1"
+    local touched=0
+
+    # Defensive: fish_add_path silently ignores a directory that doesn't
+    # exist yet, so every call site is guaranteed to work regardless of
+    # exactly when it runs relative to pip/link_shims creating $dir.
+    mkdir -p "$dir" 2>/dev/null || true
+
+    # Nothing to do if a parent process already exports it (e.g. PKGWRAP_BIN
+    # was set deliberately, or a previous run already fixed this).
+    case ":$PATH:" in
+        *":$dir:"*) return 0 ;;
+    esac
+
+    # bash: .bashrc covers interactive non-login shells (Termux, most Linux
+    # terminal emulators); .bash_profile covers login shells (macOS Terminal
+    # with bash, SSH sessions). Writing both is redundant but harmless and
+    # covers every common launch method.
+    local bash_line
+    bash_line="export PATH=\"$dir:\$PATH\""
+    for rc in "$HOME/.bashrc" "$HOME/.bash_profile"; do
+        touch "$rc" 2>/dev/null || continue
+        if ! grep -Fq "$dir" "$rc" 2>/dev/null; then
+            { printf '\n# added by the pkgwrap installer\n'; printf '%s\n' "$bash_line"; } >> "$rc"
+            touched=1
+        fi
+    done
+
+    # zsh: only touch it if zsh is actually present, so a machine that never
+    # uses zsh doesn't get a stray ~/.zshrc created.
+    if have zsh; then
+        touch "$HOME/.zshrc" 2>/dev/null
+        if ! grep -Fq "$dir" "$HOME/.zshrc" 2>/dev/null; then
+            { printf '\n# added by the pkgwrap installer\n'; printf '%s\n' "$bash_line"; } >> "$HOME/.zshrc"
+            touched=1
+        fi
+    fi
+
+    # fish uses its own config syntax, not POSIX export.
+    if have fish; then
+        local fish_conf="$HOME/.config/fish/config.fish"
+        mkdir -p "$(dirname "$fish_conf")" 2>/dev/null
+        touch "$fish_conf" 2>/dev/null
+        if ! grep -Fq "$dir" "$fish_conf" 2>/dev/null; then
+            { printf '\n# added by the pkgwrap installer\n'; printf 'fish_add_path %s\n' "$dir"; } >> "$fish_conf"
+            touched=1
+        fi
+    fi
+
+    # Export it for the rest of *this* script run too, so the sanity check
+    # at the end of main() can verify the command actually works right now.
+    export PATH="$dir:$PATH"
+
+    if [ "$touched" -eq 1 ]; then
+        ok "Added $dir to PATH for bash/zsh/fish - new terminals will have it automatically."
+    fi
+}
+
 # Install the checked-out source tree at $1, in editable mode.
 install_from_source() {
     local source_path="$1"
@@ -135,9 +200,12 @@ install_from_source() {
     fi
 
     # pipx has no editable mode, so it gets the tree as a one-off install.
+    # pipx ships its own cross-shell PATH fixer (bash/zsh/fish included) -
+    # reuse it instead of reimplementing the same thing worse.
     if have pipx; then
         info "Installing with pipx (isolated, always on PATH)..."
         pipx install --force "$source_path"
+        pipx ensurepath >/dev/null 2>&1 || true
         ok "Installed with pipx."
         return
     fi
@@ -146,6 +214,10 @@ install_from_source() {
         info "Installing with pip --user..."
         python3 -m pip install --user -e "$source_path"
         ok "Installed with pip --user."
+        # pip --user places scripts in $HOME/.local/bin on every Unix-like
+        # target this script supports (Linux, macOS, Termux, BSD), but pip
+        # never edits PATH itself - that part is the installer's job.
+        ensure_path_persisted "$HOME/.local/bin"
         return
     fi
 
@@ -156,6 +228,7 @@ install_from_source() {
     "$INSTALL_DIR/venv/bin/python" -m pip install --upgrade pip >/dev/null
     "$INSTALL_DIR/venv/bin/python" -m pip install -e "$source_path"
     link_shims "$INSTALL_DIR/venv"
+    ensure_path_persisted "$BIN_DIR"
 }
 
 clone_or_update() {
@@ -230,17 +303,32 @@ main() {
 
     echo
     ok "Installation complete."
-    info "Try: pkgwrap --backend"
 
+    # By this point every install path above has already called
+    # ensure_path_persisted (or used pipx's own ensurepath), so $PATH is
+    # exported for the remainder of *this* script and every shell config
+    # file has been updated for *future* ones. Prove it actually works
+    # right now rather than just hoping it does.
+    if command -v pkgwrap >/dev/null 2>&1; then
+        info "Try: pkgwrap --backend"
+        pkgwrap --version >/dev/null 2>&1 && ok "Verified: 'pkgwrap' runs."
+    else
+        # Only reachable if none of the known install paths ran (e.g. an
+        # unexpected pip layout) - fall back to telling the user exactly
+        # what to do instead of leaving them with a silent, broken install.
+        warn "Could not find 'pkgwrap' on PATH after installing."
+        warn "Open a new terminal, or run: source ~/.bashrc"
+    fi
+
+    # A shell script is a child process: it can update every shell's config
+    # file for next time, but it can never change the PATH of the terminal
+    # that launched it - that boundary belongs to the shell, not this
+    # script. One new terminal (or one `source`) is genuinely unavoidable
+    # for *this* session; every session after it needs nothing at all.
     case ":$PATH:" in
-        *":$BIN_DIR:"*)
-            ;;
+        *":$BIN_DIR:"*) ;;
         *)
-            warn "$BIN_DIR is not in your PATH. Add this to your shell profile:"
-            # $PATH must stay literal here: this line is printed for the user to
-            # copy into their shell profile, so it must not expand at print time.
-            # shellcheck disable=SC2016
-            printf '      export PATH="%s:$PATH"\n' "$BIN_DIR"
+            info "One-time step for this terminal: open a new one, or run 'source ~/.bashrc'."
             ;;
     esac
 }
